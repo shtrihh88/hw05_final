@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Запись {{ author.get_full_name }}{% endblock %}
+{% block header %}{{ author.get_full_name }}{% endblock %}
+{% block content %}
+
+  <main role="main" class="container">
+    <div class="row">
+      {% include 'includes/post_author.html' %}
+      <div class="col-md-9">
+        {% include 'includes/post_item.html' %}
+        {% include 'includes/comments.html' %}
+      </div>
+    </div>
+  </main>
+
+{% endblock %}}

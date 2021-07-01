@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %} {% if post %}Редактировать запись{% else %}Добавить запись{% endif %} {% endblock %}
+{% block header %} {% if post %}Редактировать запись{% else %}Добавить запись{% endif %} {% endblock %}
+{% block content %}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-primary btn-block">{% if post %}Сохранить{% else %}Добавить запись{% endif %}</button>
+  </form>
+{% endblock %}
