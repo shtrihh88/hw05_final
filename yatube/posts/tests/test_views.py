@@ -21,7 +21,7 @@ class PostPageTests(TestCase):
 
         settings.MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
-        small_gif = (
+        cls.small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
             b'\x01\x00\x80\x00\x00\x00\x00\x00'
             b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
@@ -29,9 +29,9 @@ class PostPageTests(TestCase):
             b'\x02\x00\x01\x00\x00\x02\x02\x0C'
             b'\x0A\x00\x3B'
         )
-        uploaded = SimpleUploadedFile(
+        cls.uploaded = SimpleUploadedFile(
             name='small.gif',
-            content=small_gif,
+            content=cls.small_gif,
             content_type='image/gif'
         )
 
@@ -45,8 +45,13 @@ class PostPageTests(TestCase):
             author=cls.user,
             text='test_post',
             group=cls.group,
-            image=uploaded
+            image=cls.uploaded
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
 
     def setUp(self):
         self.guest_client = Client()
@@ -54,7 +59,8 @@ class PostPageTests(TestCase):
         self.authorized_client.force_login(self.user)
         self.form_fields_new_post = {
             'text': forms.fields.CharField,
-            'group': forms.fields.ChoiceField
+            'group': forms.fields.ChoiceField,
+            'image': forms.fields.ImageField
         }
 
     def test_pages_use_correct_template(self):
@@ -163,17 +169,49 @@ class PostPageTests(TestCase):
         another_posts = response.context['page']
         self.assertNotEqual(another_posts, self.post)
 
-    def test_index_post_image_context_correct(self):
-        """ Тестирование картинки в context поста на index.html """
+    def test_index_image_context_correct(self):
+        """Тестирование картинки в на index.html"""
         response = self.authorized_client.get(reverse('posts:index'))
-
         test_image = response.context['page'].object_list[0].image
         self.assertEqual(test_image, self.post.image, (
-            ' Картинка поста на главной странице неверно отображается '
+            'Картинка поста на главной странице не отображается'
+        ))
+
+    def test_profile_image_context_correct(self):
+        """Тестирование картинки на index.html"""
+        response = self.authorized_client.get(reverse(
+            'posts:profile',
+            kwargs={'username': self.user.username}
+        ))
+        test_image = response.context['page'].object_list[0].image
+        self.assertEqual(test_image, self.post.image, (
+            'Картинка поста на странице профиля не отображается'
+        ))
+
+    def test_group_image_context_correct(self):
+        """Тестирование картинки на group.html"""
+        response = self.authorized_client.get(reverse(
+            'posts:group_posts',
+            kwargs={'slug': self.group.slug}
+        ))
+        test_image = response.context['page'].object_list[0].image
+        self.assertEqual(test_image, self.post.image, (
+            'Картинка поста на странице сообщества не отображается'
+        ))
+
+    def test_post_image_context_correct(self):
+        """Тестирование картинки на post.html"""
+        response = self.authorized_client.get(reverse(
+            'posts:post',
+            kwargs={'username': self.user.username, 'post_id': self.post.pk}
+        ))
+        test_image = response.context['post'].image
+        self.assertEqual(test_image, self.post.image, (
+            'Картинка поста на странице поста не отображается'
         ))
 
     def test_cache(self):
-        """ Тестирование работы кэша"""
+        """Тестирование работы кэша"""
         response_before = self.authorized_client.get(reverse('posts:index'))
         post = Post.objects.create(text='test', author=self.user)
         response_after = self.authorized_client.get(reverse('posts:index'))
@@ -287,3 +325,55 @@ class TestComment(TestCase):
             Comment.objects.filter(
                 text='Комментарий неавторизированного пользователя',
                 post_id=TestComment.post.id).exists())
+
+
+class TestFollow(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user_follower = User.objects.create_user(username='test_user')
+        cls.user_following = User.objects.create_user(username='test_author')
+
+        cls.post = Post.objects.create(
+            text='new_test_text',
+            author=TestFollow.user_following
+        )
+
+    def setUp(self):
+        self.guest_client = Client()
+        self.authorized_client = Client()
+        self.authorized_client.force_login(TestFollow.user_follower)
+
+    def test_follow_authorized_user(self):
+        """Тест подписки"""
+        self.authorized_client.get(reverse(
+            'posts:profile_follow', kwargs={
+                'username': TestFollow.user_following.username}))
+        self.assertEqual(Follow.objects.count(), 1)
+
+    def test_unfollow_authorized_user(self):
+        """Тест отписки"""
+        self.authorized_client.get(reverse(
+            'posts:profile_unfollow', kwargs={
+                'username': TestFollow.user_following.username}))
+        self.assertEqual(Follow.objects.count(), 0)
+
+    def test_follow_not_authorized_user(self):
+        """Тест подписки для гостя"""
+        response = self.guest_client.get(reverse(
+            'posts:profile_follow', kwargs={
+                'username': TestFollow.user_following.username}))
+        reverse_login = reverse('login')
+        reverse_follow = reverse(
+            'posts:profile_follow',
+            kwargs={'username': TestFollow.user_following.username}
+        )
+
+        self.assertRedirects(
+            response, f'{reverse_login}?next={reverse_follow}')
+
+    def test_check_new_post_from_not_follower(self):
+        user_not_follower = User.objects.create_user(username='new_test_user')
+        self.authorized_client.force_login(user_not_follower)
+        response = self.authorized_client.get(reverse('posts:follow_index'))
+        self.assertNotContains(response, TestFollow.post.text)
