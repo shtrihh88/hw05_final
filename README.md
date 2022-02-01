@@ -36,5 +36,5 @@ python manage.py runserver
 ```
 ***
 
-## Временно проекта размещен на [Pythonanywhere](http://pythonanywhere.com/)
+## Временно проект размещен на [Pythonanywhere](http://pythonanywhere.com/)
 ### Ознакомиться с ним можно по адресу http://shtrihh88.pythonanywhere.com/
